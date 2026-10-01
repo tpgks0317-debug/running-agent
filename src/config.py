@@ -1,5 +1,6 @@
 """Load project settings from the .env file."""
 import os
+import shutil
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -7,6 +8,13 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 SYSTEM_PROMPT_PATH = PROJECT_ROOT / "prompts" / "system_prompt.md"
+
+# On Vercel only /tmp is writable, so work on a copy of data/ there.
+# The copy starts fresh whenever Vercel starts a new server instance.
+if os.getenv("VERCEL"):
+    DATA_DIR = Path("/tmp/data")
+    if not DATA_DIR.exists():
+        shutil.copytree(PROJECT_ROOT / "data", DATA_DIR)
 
 load_dotenv(PROJECT_ROOT / ".env")
 

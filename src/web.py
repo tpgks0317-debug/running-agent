@@ -8,7 +8,7 @@ from src.agent import CafeAgent
 from src.tools.data_store import load
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+app.secret_key = os.getenv("SECRET_KEY") or os.urandom(24)  # set SECRET_KEY when hosting
 
 _agents: dict[str, CafeAgent] = {}  # session_id -> CafeAgent (server-side, in-memory)
 
