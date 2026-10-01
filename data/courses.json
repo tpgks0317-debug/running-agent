@@ -1,0 +1,10 @@
+{
+  "무심천 러닝코스":     {"distance_km": 5.0,  "difficulty": "평지",       "region": "청주", "description": "무심천을 따라 이어지는 평탄한 산책·러닝 겸용로"},
+  "운천 신봉 하천길":    {"distance_km": 3.0,  "difficulty": "평지",       "region": "청주", "description": "짧게 뛰기 좋은 하천변 평지 코스"},
+  "상당산성 코스":       {"distance_km": 8.0,  "difficulty": "언덕 많음",   "region": "청주", "description": "산성까지 오르는 경사 구간이 포함된 트레일"},
+  "청남대 둘레길":       {"distance_km": 12.0, "difficulty": "완만한 언덕", "region": "청주", "description": "대청호를 따라 완만한 오르내림이 있는 둘레길"},
+  "한강 반포 코스":      {"distance_km": 10.0, "difficulty": "평지",       "region": "서울", "description": "한강공원을 따라 이어지는 평탄한 장거리 코스"},
+  "해운대 해변 코스":    {"distance_km": 6.0,  "difficulty": "평지",       "region": "부산", "description": "해변을 따라 이어지는 경치 좋은 러닝로"},
+  "대청호 오백리길 일부": {"distance_km": 15.0, "difficulty": "언덕 많음",   "region": "대전", "description": "대청호를 도는 장거리 트레일, 오르막이 많음"},
+  "정부청사 둘레길":     {"distance_km": 4.0,  "difficulty": "완만한 언덕", "region": "대전", "description": "완만한 언덕이 섞인 도심 둘레길"}
+}

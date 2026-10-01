@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏃 러닝 코치</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #eef5f0;
+    --panel: #ffffff;
+    --accent: #2f7a4f;
+    --accent-light: #dcf0e2;
+    --text: #1f2a24;
+    --muted: #6f8278;
+    --user-bubble: #2f7a4f;
+    --bot-bubble: #dcf0e2;
+    --error: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  .app {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    padding: 16px 20px;
+    background: var(--accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header button {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  header button:hover { background: rgba(255,255,255,0.28); }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .msg { display: flex; flex-direction: column; max-width: 80%; }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.bot { align-self: flex-start; align-items: flex-start; }
+  .bubble {
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg.user .bubble { background: var(--user-bubble); color: white; border-bottom-right-radius: 4px; }
+  .msg.bot .bubble { background: var(--bot-bubble); color: var(--text); border-bottom-left-radius: 4px; }
+  .msg.bot .bubble.error { background: #fbe9e7; color: var(--error); }
+
+  .tools {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    max-width: 100%;
+  }
+  .tools summary { cursor: pointer; user-select: none; }
+  .tool-call {
+    font-family: "SF Mono", Consolas, monospace;
+    background: #eef6f0;
+    border-radius: 8px;
+    padding: 6px 8px;
+    margin-top: 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .msg.has-map { width: 80%; }
+  .route-map {
+    width: 100%;
+    height: 280px;
+    margin-top: 8px;
+    border-radius: 12px;
+    border: 1px solid #c8ddcc;
+  }
+  .route-caption { margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+  .typing { color: var(--muted); font-size: 13px; padding-left: 4px; }
+
+  form#chat-form {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--accent-light);
+    background: var(--panel);
+  }
+  #input {
+    flex: 1;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid #c8ddcc;
+    font-size: 14px;
+    outline: none;
+  }
+  #input:focus { border-color: var(--accent); }
+  #send {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0 18px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #send:disabled { opacity: 0.5; cursor: default; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>🏃 러닝 코치</h1>
+      <button id="reset">New chat</button>
+    </header>
+    <div id="messages"></div>
+    <form id="chat-form">
+      <input id="input" type="text" placeholder="목표, 코스, 훈련 계획에 대해 물어보세요..." autocomplete="off" />
+      <button id="send" type="submit">Send</button>
+    </form>
+  </div>
+
+<script>
+const messagesEl = document.getElementById("messages");
+const form = document.getElementById("chat-form");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const resetBtn = document.getElementById("reset");
+
+// Show the model's **bold** markers as bold; everything else stays plain text.
+function setBubbleText(bubble, text) {
+  text.split(/\*\*(.+?)\*\*/g).forEach((part, i) => {
+    if (!part) return;
+    const node = i % 2 ? document.createElement("strong") : document.createTextNode(part);
+    if (i % 2) node.textContent = part;
+    bubble.appendChild(node);
+  });
+}
+
+// Draw a planned route (GeoJSON Feature) under a bot message.
+function addRouteMap(wrap, route) {
+  if (!window.L) return;  // map library failed to load — the text answer still stands
+  wrap.classList.add("has-map");
+  const mapEl = document.createElement("div");
+  mapEl.className = "route-map";
+  wrap.appendChild(mapEl);
+
+  const p = route.properties;
+  const caption = document.createElement("div");
+  caption.className = "route-caption";
+  caption.textContent = `${p.start} · ${p.distance_km}km · 상승 ${p.ascent_m}m · ${p.difficulty}`;
+  wrap.appendChild(caption);
+
+  const map = L.map(mapEl, { scrollWheelZoom: false });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors",
+  }).addTo(map);
+  const line = L.geoJSON(route, { style: { color: "#2f7a4f", weight: 5, opacity: 0.85 } }).addTo(map);
+  const [lon, lat] = route.geometry.coordinates[0];
+  L.marker([lat, lon]).addTo(map).bindPopup("출발 / 도착");
+  map.fitBounds(line.getBounds(), { padding: [16, 16] });
+  setTimeout(() => map.invalidateSize(), 0);
+}
+
+function addMessage(role, text, toolCalls, isError = false, route = null) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg " + role;
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble" + (isError ? " error" : "");
+  setBubbleText(bubble, text);
+  wrap.appendChild(bubble);
+
+  if (toolCalls && toolCalls.length) {
+    const details = document.createElement("details");
+    details.className = "tools";
+    const summary = document.createElement("summary");
+    summary.textContent = `🔧 ${toolCalls.length} tool call${toolCalls.length > 1 ? "s" : ""}`;
+    details.appendChild(summary);
+    toolCalls.forEach(tc => {
+      const line = document.createElement("div");
+      line.className = "tool-call";
+      line.textContent = `${tc.name}(${tc.arguments}) → ${JSON.stringify(tc.result)}`;
+      details.appendChild(line);
+    });
+    wrap.appendChild(details);
+  }
+
+  messagesEl.appendChild(wrap);
+  if (route) addRouteMap(wrap, route);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return wrap;
+}
+
+function setLoading(isLoading) {
+  sendBtn.disabled = isLoading;
+  input.disabled = isLoading;
+}
+
+async function sendMessage(text) {
+  addMessage("user", text);
+  setLoading(true);
+
+  const typing = document.createElement("div");
+  typing.className = "typing";
+  typing.textContent = "Agent is typing...";
+  messagesEl.appendChild(typing);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text }),
+    });
+    const data = await res.json();
+    typing.remove();
+    if (!res.ok) {
+      addMessage(
+        "bot",
+        "죄송해요, 요청을 처리하지 못했어요. 메시지를 다시 한번 확인하고 보내주시겠어요? 🙏",
+        null,
+        true
+      );
+    } else {
+      addMessage("bot", data.reply || "죄송해요, 지금은 답을 드리지 못했어요. 다시 한번 물어봐 주시겠어요?", data.tool_calls, false, data.route);
+    }
+  } catch (err) {
+    typing.remove();
+    addMessage(
+      "bot",
+      "죄송합니다, 지금 서버와 연결이 원활하지 않네요. 잠시 후 다시 시도해 주시겠어요? 🙇",
+      null,
+      true
+    );
+  } finally {
+    setLoading(false);
+    input.focus();
+  }
+}
+
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  sendMessage(text);
+});
+
+resetBtn.addEventListener("click", async () => {
+  await fetch("/api/reset", { method: "POST" });
+  messagesEl.innerHTML = "";
+  addMessage("bot", "새 대화를 시작했어요. 무엇을 도와드릴까요?");
+});
+
+addMessage("bot", "안녕하세요! 러닝 코치 어시스턴트입니다. 목표 설정, 코스 추천, 훈련 계획, 러닝 기록을 도와드릴게요.");
+</script>
+</body>
+</html>
